@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import YouTube, { YouTubeProps, YouTubePlayer as YTPlayer } from 'react-youtube';
+import toast from 'react-hot-toast';
 import { Play, Pause, RotateCcw, Link2, Lock } from 'lucide-react';
 import { VideoState } from '../types';
 
@@ -27,24 +28,54 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   const [duration, setDuration] = useState(0);
   const isSyncingRef = useRef(false);
 
+  // Helper to extract 11-char YouTube ID on client
+  const extractVideoId = (urlOrId: string): string | null => {
+    if (!urlOrId) return null;
+    const str = urlOrId.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+    const match = str.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
+    if (match && match[2] && match[2].length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(match[2])) {
+      return match[2];
+    }
+    return null;
+  };
+
+  const stateReceivedAtRef = useRef<number>(Date.now());
+  const lastStateRef = useRef<VideoState>(videoState);
+
   // Helper function to synchronize player with video state
   const syncPlayerWithVideoState = (player: YTPlayer | null, state: VideoState) => {
     if (!player || !player.getPlayerState) return;
 
     isSyncingRef.current = true;
 
+    const validId = extractVideoId(state.videoId) || 'dQw4w9WgXcQ';
+    const elapsed = state.isPlaying ? (Date.now() - stateReceivedAtRef.current) / 1000 : 0;
+    const expectedTime = state.currentTime + elapsed;
+
     // 1. Video ID sync
     const currentVideoUrl = player.getVideoUrl ? player.getVideoUrl() : '';
-    if (state.videoId && !currentVideoUrl.includes(state.videoId)) {
-      player.loadVideoById({
-        videoId: state.videoId,
-        startSeconds: state.currentTime,
-      });
+    if (validId && !currentVideoUrl.includes(validId)) {
+      try {
+        if (state.isPlaying) {
+          player.loadVideoById({
+            videoId: validId,
+            startSeconds: expectedTime,
+          });
+        } else {
+          player.cueVideoById({
+            videoId: validId,
+            startSeconds: expectedTime,
+          });
+        }
+      } catch (e) {
+        console.warn('Error loading video:', e);
+      }
     } else {
-      // 2. Timestamp seek sync (if drift > 1s)
+      // 2. High-precision timestamp seek sync (if drift > 0.5s)
       const curTime = player.getCurrentTime ? player.getCurrentTime() : 0;
-      if (Math.abs(curTime - state.currentTime) > 1.0) {
-        player.seekTo(state.currentTime, true);
+      if (Math.abs(curTime - expectedTime) > 0.5) {
+        player.seekTo(expectedTime, true);
       }
     }
 
@@ -56,46 +87,75 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
         setIsPlayingLocally(true);
       }
     } else {
-      if (playerState !== 2) {
-        player.pauseVideo();
-        setIsPlayingLocally(false);
-      }
+      player.pauseVideo();
+      setIsPlayingLocally(false);
     }
 
     setTimeout(() => {
       isSyncingRef.current = false;
-    }, 600);
+    }, 500);
   };
 
   // Ready handler (triggers immediately when player mounts)
   const handleReady: YouTubeProps['onReady'] = (event) => {
     playerRef.current = event.target;
     setDuration(event.target.getDuration());
-    // Sync video state immediately on mount / ready
     syncPlayerWithVideoState(event.target, videoState);
+  };
+
+  // Handle player playback or embedding errors without crashing page
+  const handleError: YouTubeProps['onError'] = (e) => {
+    console.warn('YouTube Player error code:', e?.data);
+    toast.error('Could not play video (private, deleted, or invalid link).');
   };
 
   // Synchronize player with external socket videoState changes
   useEffect(() => {
+    stateReceivedAtRef.current = Date.now();
+    lastStateRef.current = videoState;
     if (playerRef.current) {
       syncPlayerWithVideoState(playerRef.current, videoState);
     }
   }, [videoState]);
 
-  // Periodic progress bar update
+  // Periodic progress bar update and participant runtime drift auto-correction
   useEffect(() => {
     const interval = setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime) {
-        setCurrentTime(playerRef.current.getCurrentTime());
+        const cur = playerRef.current.getCurrentTime();
+        setCurrentTime(cur);
         setDuration(playerRef.current.getDuration());
+
+        // For participants: auto-correct playback drift during continuous runtime
+        if (!canControl && lastStateRef.current && !isSyncingRef.current) {
+          const state = lastStateRef.current;
+          if (state.isPlaying) {
+            const elapsed = (Date.now() - stateReceivedAtRef.current) / 1000;
+            const expected = state.currentTime + elapsed;
+            const drift = Math.abs(cur - expected);
+
+            // If drift exceeds 0.8s, perform seamless micro-seek to align with Host
+            if (drift > 0.8) {
+              playerRef.current.seekTo(expected, true);
+            }
+          }
+        }
       }
-    }, 500);
+    }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [canControl]);
 
   // Handle local YouTube Player state change (if user clicks iframe directly)
   const handleStateChange: YouTubeProps['onStateChange'] = (event) => {
-    if (isSyncingRef.current || !canControl) return;
+    if (isSyncingRef.current) return;
+
+    if (!canControl) {
+      // Force re-sync if a non-controller participant manages to alter state
+      if (playerRef.current) {
+        syncPlayerWithVideoState(playerRef.current, videoState);
+      }
+      return;
+    }
 
     const state = event.data;
     const time = playerRef.current?.getCurrentTime() || 0;
@@ -123,7 +183,14 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canControl || !newVideoUrl.trim()) return;
-    onChangeVideo(newVideoUrl.trim());
+
+    const extracted = extractVideoId(newVideoUrl.trim());
+    if (!extracted) {
+      toast.error('Invalid YouTube URL or Video ID. Please enter a valid YouTube link.');
+      return;
+    }
+
+    onChangeVideo(extracted);
     setNewVideoUrl('');
   };
 
@@ -170,9 +237,27 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
             videoId={videoState.videoId}
             opts={opts}
             onReady={handleReady}
+            onError={handleError}
             onStateChange={handleStateChange}
             style={{ width: '100%', height: '100%' }}
           />
+
+          {/* Transparent Overlay Shield for Participants to block all video clicks */}
+          {!canControl && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                zIndex: 20,
+                background: 'transparent',
+                cursor: 'default',
+              }}
+              title="Playback control is restricted to Host & Moderator"
+            />
+          )}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
+import toast, { Toaster } from 'react-hot-toast';
 import { socket } from './services/socket';
 import { CreateJoinRoom } from './components/CreateJoinRoom';
 import { YouTubePlayerComponent } from './components/YouTubePlayer';
@@ -18,7 +19,6 @@ export const App: React.FC = () => {
   const [, setUsername] = useState('');
   const [roomData, setRoomData] = useState<RoomData | null>(null);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Check URL search query for initial room code
   const queryRoomCode = new URLSearchParams(window.location.search).get('room') || '';
@@ -28,14 +28,27 @@ export const App: React.FC = () => {
     socket.on('room_state', (data: RoomData) => {
       setRoomData(data);
       setJoined(true);
+      toast.success(`🎉 Connected to Watch Party Room [${data.code}]!`);
     });
 
-    socket.on('user_joined', ({ participants }: { participants: ParticipantData[] }) => {
+    socket.on('user_joined', ({ username, participants }: { username: string; participants: ParticipantData[] }) => {
       setRoomData((prev) => (prev ? { ...prev, participants } : null));
+      if (username) {
+        toast.success(`👤 ${username} joined the watch party!`, {
+          icon: '👋',
+          style: { background: '#121624', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.1)' }
+        });
+      }
     });
 
-    socket.on('user_left', ({ participants }: { participants: ParticipantData[] }) => {
+    socket.on('user_left', ({ username, participants }: { username: string; participants: ParticipantData[] }) => {
       setRoomData((prev) => (prev ? { ...prev, participants } : null));
+      if (username) {
+        toast(`🚪 ${username} left the room`, {
+          icon: '👋',
+          style: { background: '#121624', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)' }
+        });
+      }
     });
 
     socket.on('play', ({ currentTime, isPlaying }: { currentTime: number; isPlaying: boolean }) => {
@@ -73,14 +86,37 @@ export const App: React.FC = () => {
 
     socket.on('change_video', (videoState: VideoState) => {
       setRoomData((prev) => (prev ? { ...prev, videoState } : null));
+      toast('🎬 Video was changed', {
+        icon: '📺',
+        style: { background: '#121624', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)' }
+      });
     });
 
-    socket.on('role_assigned', ({ participants }: { participants: ParticipantData[] }) => {
+    socket.on('role_assigned', ({ username, role, participants }: { username: string; role: Role; participants: ParticipantData[] }) => {
       setRoomData((prev) => (prev ? { ...prev, participants } : null));
+      if (role === 'HOST') {
+        toast(`👑 Control transferred to ${username}!`, {
+          icon: '👑',
+          style: { background: '#121624', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.4)' }
+        });
+      } else if (role === 'MODERATOR') {
+        toast(`🛡️ ${username} was promoted to Moderator`, {
+          icon: '🛡️',
+          style: { background: '#121624', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.4)' }
+        });
+      } else {
+        toast(`👤 ${username} is now a Participant`, {
+          icon: '👤',
+          style: { background: '#121624', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)' }
+        });
+      }
     });
 
-    socket.on('participant_removed', ({ participants }: { participants: ParticipantData[] }) => {
+    socket.on('participant_removed', ({ username, participants }: { username?: string; participants: ParticipantData[] }) => {
       setRoomData((prev) => (prev ? { ...prev, participants } : null));
+      toast.error(`🚫 ${username || 'Participant'} was removed by the Host`, {
+        style: { background: '#121624', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+      });
     });
 
     socket.on('chat_message', (message: ChatMessageData) => {
@@ -110,15 +146,16 @@ export const App: React.FC = () => {
     });
 
     socket.on('kicked', (msg: string) => {
-      alert(msg);
+      toast.error(msg || 'You have been removed from the room by the host.');
       setJoined(false);
       setRoomData(null);
       socket.disconnect();
     });
 
     socket.on('error_message', (msg: string) => {
-      setErrorMsg(msg);
-      setTimeout(() => setErrorMsg(null), 4000);
+      toast.error(msg, {
+        style: { background: '#121624', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+      });
     });
 
     return () => {
@@ -149,6 +186,7 @@ export const App: React.FC = () => {
     socket.disconnect();
     setJoined(false);
     setRoomData(null);
+    toast('You left the watch party', { icon: '👋' });
   };
 
   // Find current user's role
@@ -157,11 +195,17 @@ export const App: React.FC = () => {
   const canControl = currentRole === 'HOST' || currentRole === 'MODERATOR';
 
   if (!joined || !roomData) {
-    return <CreateJoinRoom onJoinRoom={handleJoinRoom} defaultRoomCode={queryRoomCode} />;
+    return (
+      <>
+        <Toaster position="top-right" toastOptions={{ style: { background: '#121624', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.1)' } }} />
+        <CreateJoinRoom onJoinRoom={handleJoinRoom} defaultRoomCode={queryRoomCode} />
+      </>
+    );
   }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Toaster position="top-right" toastOptions={{ style: { background: '#121624', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.1)' } }} />
       {/* Navbar */}
       <header
         className="glass-panel"
@@ -204,27 +248,6 @@ export const App: React.FC = () => {
           <LogOut size={16} /> Leave Party
         </button>
       </header>
-
-      {/* Toast Error Alert */}
-      {errorMsg && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '80px',
-            right: '24px',
-            background: 'rgba(239, 68, 68, 0.9)',
-            color: '#fff',
-            padding: '12px 18px',
-            borderRadius: '10px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-            fontSize: '13px',
-            fontWeight: 600,
-            zIndex: 1000,
-          }}
-        >
-          ⚠️ {errorMsg}
-        </div>
-      )}
 
       {/* Floating Reactions Overlay */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 999, overflow: 'hidden' }}>

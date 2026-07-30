@@ -116,8 +116,15 @@ export function setupSocketHandlers(io: Server) {
         );
       }
 
-      // Extract video ID from URL if full URL is pasted
+      // Extract and validate video ID from URL or input
       const extractedId = parseYouTubeVideoId(videoId);
+      if (!extractedId) {
+        return socket.emit(
+          "error_message",
+          "Invalid YouTube URL or Video ID. Please provide a valid YouTube link.",
+        );
+      }
+
       room.updateVideoState(extractedId, 0, true);
 
       io.to(room.code).emit("change_video", {
@@ -249,12 +256,24 @@ export function setupSocketHandlers(io: Server) {
     }
   }
 
-  // Helper to extract video ID from YouTube URLs
-  function parseYouTubeVideoId(urlOrId: string): string {
-    if (!urlOrId) return "dQw4w9WgXcQ";
+  // Helper to extract & validate 11-character YouTube video ID
+  function parseYouTubeVideoId(urlOrId: string): string | null {
+    if (!urlOrId) return null;
+    const str = urlOrId.trim();
+
+    // 1. Direct 11-character video ID
+    if (/^[a-zA-Z0-9_-]{11}$/.test(str)) {
+      return str;
+    }
+
+    // 2. YouTube URL formats
     const regExp =
       /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = urlOrId.match(regExp);
-    return match && match[2].length === 11 ? match[2] : urlOrId.trim();
+    const match = str.match(regExp);
+    if (match && match[2] && match[2].length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(match[2])) {
+      return match[2];
+    }
+
+    return null;
   }
 }
