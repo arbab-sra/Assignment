@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id           String        @id @default(uuid())
+  code         String        @unique
+  name         String        @default("Watch Party Room")
+  videoId      String        @default("dQw4w9WgXcQ") // Default video
+  currentTime  Float         @default(0)
+  isPlaying    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  participants Participant[]
+  chatMessages ChatMessage[]
+}
+
+enum Role {
+  HOST
+  MODERATOR
+  PARTICIPANT
+}
+
+model Participant {
+  id        String   @id @default(uuid())
+  socketId  String   @unique
+  username  String
+  role      Role     @default(PARTICIPANT)
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  username  String
+  text      String
+  timestamp DateTime @default(now())
+}
