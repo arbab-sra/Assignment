@@ -33,37 +33,53 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
 
   // Load saved user & local/cloud recent rooms
   useEffect(() => {
+    let localList: RecentRoom[] = [];
     try {
-      // 1. Check saved auth user
+      // 1. Always load local recent rooms first
+      const savedRooms = localStorage.getItem('watchparty_recent_rooms');
+      if (savedRooms) {
+        localList = JSON.parse(savedRooms) as RecentRoom[];
+        setRecentRooms(localList);
+      }
+
+      // 2. Check saved auth user
       const savedAuth = localStorage.getItem('watchparty_auth_user');
       if (savedAuth) {
         const user: AuthUser = JSON.parse(savedAuth);
         setAuthUser(user);
         setUsername(user.name);
-        fetchUserCloudRooms(user.id);
+        fetchUserCloudRooms(user.id, localList);
       } else {
-        // Fallback to local saved username & recent rooms
         const savedUser = localStorage.getItem('watchparty_saved_username');
         if (savedUser) setUsername(savedUser);
-
-        const savedRooms = localStorage.getItem('watchparty_recent_rooms');
-        if (savedRooms) {
-          setRecentRooms(JSON.parse(savedRooms) as RecentRoom[]);
-        }
       }
     } catch (e) {
       console.warn('Could not read from localStorage:', e);
     }
   }, []);
 
-  // Fetch cross-device rooms for authenticated user from PostgreSQL
-  const fetchUserCloudRooms = async (userId: string) => {
+  // Fetch cross-device rooms for authenticated user from PostgreSQL and merge
+  const fetchUserCloudRooms = async (userId: string, currentLocal: RecentRoom[] = []) => {
     try {
-      const res = await fetch(`${SERVER_URL}/api/users/${userId}/rooms`);
+      const token = localStorage.getItem('watchparty_auth_token') || '';
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${SERVER_URL}/api/users/${userId}/rooms`, { headers });
       if (res.ok) {
-        const data = await res.json();
-        if (data.rooms && data.rooms.length > 0) {
-          setRecentRooms(data.rooms);
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.rooms && Array.isArray(data.rooms)) {
+            const map = new Map<string, RecentRoom>();
+            currentLocal.forEach((r) => map.set(r.code, r));
+            data.rooms.forEach((r: RecentRoom) => {
+              if (!map.has(r.code)) map.set(r.code, r);
+            });
+            const merged = Array.from(map.values()).slice(0, 5);
+            setRecentRooms(merged);
+            localStorage.setItem('watchparty_recent_rooms', JSON.stringify(merged));
+          }
         }
       }
     } catch (e) {
@@ -84,6 +100,7 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
     setAuthUser(null);
     try {
       localStorage.removeItem('watchparty_auth_user');
+      localStorage.removeItem('watchparty_auth_token');
     } catch (e) {}
     toast.success('Signed out. Switched to guest mode.');
   };

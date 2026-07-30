@@ -3,10 +3,11 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { initDB, prisma } from "./utility/db";
 import { setupSocketHandlers } from "./sockets/socketHandler";
 import { RoomManager } from "./models/RoomManager";
-import crypto from "crypto";
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ const server = http.createServer(app);
 
 const rawClientUrl = process.env.CLIENT_URL || "*";
 const CORS_ORIGIN = rawClientUrl === "*" ? "*" : rawClientUrl.replace(/\/+$/, "");
+const JWT_SECRET = process.env.JWT_SECRET || "syncbits_super_secret_jwt_key_2026";
 
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
@@ -38,11 +40,6 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Helper password hash
-function hashPassword(pwd: string): string {
-  return crypto.createHash("sha256").update(pwd).digest("hex");
-}
-
 // Auth: Register
 app.post("/api/auth/register", async (req, res) => {
   try {
@@ -57,15 +54,23 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ error: "Email is already registered. Please sign in." });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
         email: cleanEmail,
-        password: hashPassword(password),
+        password: hashedPassword,
         name: name.trim(),
       },
     });
 
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
     return res.json({
+      token,
       user: {
         id: user.id,
         email: user.email,
@@ -89,11 +94,23 @@ app.post("/api/auth/login", async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
 
-    if (!user || user.password !== hashPassword(password)) {
+    if (!user) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
     return res.json({
+      token,
       user: {
         id: user.id,
         email: user.email,

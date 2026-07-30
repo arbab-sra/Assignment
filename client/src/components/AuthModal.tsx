@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: { id: string; email: string; name: string }) => void;
+  onSuccess: (user: { id: string; email: string; name: string }, token?: string) => void;
 }
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5001';
@@ -36,14 +36,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      let data: any;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        throw new Error(`Server returned HTTP ${res.status}. Please check VITE_SERVER_URL configuration.`);
+      }
 
       if (!res.ok) {
-        throw new Error(data.error || 'Authentication failed.');
+        throw new Error(data?.error || 'Authentication failed.');
+      }
+
+      if (data.token) {
+        localStorage.setItem('watchparty_auth_token', data.token);
       }
 
       toast.success(tab === 'REGISTER' ? 'Account created successfully!' : 'Signed in successfully!');
-      onSuccess(data.user);
+      onSuccess(data.user, data.token);
       onClose();
     } catch (err: any) {
       toast.error(err.message || 'Something went wrong.');
