@@ -30,7 +30,7 @@ Designed for seamless, sub-200ms multi-device synchronized video playback across
 
 ## 🌟 Core Features
 
-1. ** Video Synchronization**: Instant play, pause, seek scrubbing, and video URL switching across all room members with transit time network compensation.
+1. **Video Synchronization**: Instant play, pause, seek scrubbing, and video URL switching across all room members with transit time network compensation.
 2. **Room-Based Multi-Tenancy**: Join via unique 6-character room codes (e.g. `PARTY1`) or 1-click shareable links (`?room=PARTY1`).
 3. **Role-Based Access Control (RBAC)**:
    - **Host** (Room Creator): Full playback control, participant promotion/demotion, host transfer, and participant kicking.
@@ -62,7 +62,7 @@ Create a `.env` file inside the `server/` directory:
 
 ```env
 CLIENT_URL=http://localhost:3000
-DATABASE_URL="postgresql://arbab_neon_owner:Iy56uVfSceRj@ep-small-bar-a4nyo828.us-east-1.aws.neon.tech/neondb?sslmode=require&connect_timeout=15"
+DATABASE_URL=""
 ```
 
 _(Note: You can use your Neon Tech Cloud database URL or local PostgreSQL `postgresql://postgres:postgrespassword@localhost:5432/watchpartydb`)_

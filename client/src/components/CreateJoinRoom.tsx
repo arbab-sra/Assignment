@@ -1,16 +1,114 @@
-import React, { useState } from 'react';
-import { Users, Sparkles, Video, ArrowRight, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Sparkles, Video, ArrowRight, Loader2, Clock, Trash2, LogIn, UserCheck, LogOut } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { AuthModal } from './AuthModal';
 
 interface Props {
-  onJoinRoom: (username: string, roomCode: string) => void;
+  onJoinRoom: (username: string, roomCode: string, userId?: string) => void;
   defaultRoomCode?: string;
 }
+
+export interface RecentRoom {
+  code: string;
+  role: 'HOST' | 'JOINED';
+  joinedAt: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5001';
 
 export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = '' }) => {
   const [username, setUsername] = useState('');
   const [roomCode, setRoomCode] = useState(defaultRoomCode);
   const [mode, setMode] = useState<'JOIN' | 'CREATE'>('JOIN');
   const [isLoading, setIsLoading] = useState(false);
+  const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Load saved user & local/cloud recent rooms
+  useEffect(() => {
+    try {
+      // 1. Check saved auth user
+      const savedAuth = localStorage.getItem('watchparty_auth_user');
+      if (savedAuth) {
+        const user: AuthUser = JSON.parse(savedAuth);
+        setAuthUser(user);
+        setUsername(user.name);
+        fetchUserCloudRooms(user.id);
+      } else {
+        // Fallback to local saved username & recent rooms
+        const savedUser = localStorage.getItem('watchparty_saved_username');
+        if (savedUser) setUsername(savedUser);
+
+        const savedRooms = localStorage.getItem('watchparty_recent_rooms');
+        if (savedRooms) {
+          setRecentRooms(JSON.parse(savedRooms) as RecentRoom[]);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read from localStorage:', e);
+    }
+  }, []);
+
+  // Fetch cross-device rooms for authenticated user from PostgreSQL
+  const fetchUserCloudRooms = async (userId: string) => {
+    try {
+      const res = await fetch(`${SERVER_URL}/api/users/${userId}/rooms`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.rooms && data.rooms.length > 0) {
+          setRecentRooms(data.rooms);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch cloud user rooms:', e);
+    }
+  };
+
+  const handleLoginSuccess = (user: AuthUser) => {
+    setAuthUser(user);
+    setUsername(user.name);
+    try {
+      localStorage.setItem('watchparty_auth_user', JSON.stringify(user));
+    } catch (e) {}
+    fetchUserCloudRooms(user.id);
+  };
+
+  const handleSignOut = () => {
+    setAuthUser(null);
+    try {
+      localStorage.removeItem('watchparty_auth_user');
+    } catch (e) {}
+    toast.success('Signed out. Switched to guest mode.');
+  };
+
+  // Save room to recent rooms history
+  const saveToRecentRooms = (code: string, isHost: boolean) => {
+    try {
+      const raw = localStorage.getItem('watchparty_recent_rooms');
+      const existing: RecentRoom[] = raw ? (JSON.parse(raw) as RecentRoom[]) : [];
+      const filtered = existing.filter((r) => r.code !== code);
+      const roleType: 'HOST' | 'JOINED' = isHost ? 'HOST' : 'JOINED';
+      const updated: RecentRoom[] = [
+        {
+          code,
+          role: roleType,
+          joinedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+        ...filtered,
+      ].slice(0, 5);
+      localStorage.setItem('watchparty_recent_rooms', JSON.stringify(updated));
+      setRecentRooms(updated);
+    } catch (e) {
+      console.warn('Could not save to localStorage:', e);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,8 +121,27 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
 
     if (!targetCode) return;
 
+    // Save username & recent room to localStorage
+    try {
+      localStorage.setItem('watchparty_saved_username', username.trim());
+    } catch (e) {}
+    saveToRecentRooms(targetCode, mode === 'CREATE');
+
     setIsLoading(true);
-    onJoinRoom(username.trim(), targetCode);
+    onJoinRoom(username.trim(), targetCode, authUser?.id);
+  };
+
+  const handleRejoinRecent = (item: RecentRoom) => {
+    const activeUsername = username.trim() || authUser?.name || localStorage.getItem('watchparty_saved_username') || '';
+    if (!activeUsername.trim()) {
+      toast.error('Please enter your display name first.');
+      return;
+    }
+    setRoomCode(item.code);
+    setMode('JOIN');
+    saveToRecentRooms(item.code, false);
+    setIsLoading(true);
+    onJoinRoom(activeUsername.trim(), item.code, authUser?.id);
   };
 
   return (
@@ -52,6 +169,47 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
           boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
         }}
       >
+        {/* Auth Bar Header */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          {authUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(180, 225, 235, 0.12)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(180, 225, 235, 0.25)' }}>
+              <UserCheck size={14} color="var(--color-cyan)" />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-cyan)' }}>
+                {authUser.name}
+              </span>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', marginLeft: '4px' }}
+                title="Sign Out"
+              >
+                <LogOut size={13} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(249, 232, 162, 0.15)',
+                border: '1px solid rgba(249, 232, 162, 0.3)',
+                color: 'var(--color-yellow)',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <LogIn size={14} /> Sign In / Register
+            </button>
+          )}
+        </div>
+
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <div
@@ -225,6 +383,128 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
           </button>
         </form>
 
+        {recentRooms.length > 0 && (
+          <div
+            style={{
+              marginTop: "24px",
+              paddingTop: "20px",
+              borderTop: "1px solid var(--glass-border)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "12px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: "var(--text-secondary)",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <Clock size={14} color="var(--color-cyan)" /> {authUser ? 'Your Cloud & Recent Rooms' : 'Recent Rooms'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    localStorage.removeItem("watchparty_recent_rooms");
+                  } catch (e) {}
+                  setRecentRooms([]);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+                title="Clear recent rooms history"
+              >
+                <Trash2 size={12} /> Clear
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {recentRooms.map((item) => (
+                <div
+                  key={item.code}
+                  onClick={() => handleRejoinRecent(item)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    background: "rgba(9, 14, 23, 0.6)",
+                    borderRadius: "10px",
+                    border: "1px solid var(--glass-border)",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                  className="recent-room-item"
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-heading)",
+                        fontWeight: 800,
+                        fontSize: "14px",
+                        color: "var(--color-yellow)",
+                        letterSpacing: "1px",
+                      }}
+                    >
+                      {item.code}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        background:
+                          item.role === "HOST"
+                            ? "rgba(249, 232, 162, 0.2)"
+                            : "rgba(180, 225, 235, 0.2)",
+                        color:
+                          item.role === "HOST"
+                            ? "var(--color-yellow)"
+                            : "var(--color-cyan)",
+                      }}
+                    >
+                      {item.role}
+                    </span>
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--color-cyan)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    Rejoin <ArrowRight size={13} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             marginTop: "24px",
@@ -236,6 +516,12 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
           Sync video playback • Assign participant roles • Live chat
         </div>
       </div>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={handleLoginSuccess}
+      />
     </div>
   );
 };

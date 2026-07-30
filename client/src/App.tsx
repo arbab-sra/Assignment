@@ -289,10 +289,10 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const handleJoinRoom = (name: string, code: string) => {
+  const handleJoinRoom = (name: string, code: string, userId?: string) => {
     setUsername(name);
     socket.connect();
-    socket.emit("join_room", { roomId: code, username: name });
+    socket.emit("join_room", { roomId: code, username: name, userId });
   };
 
   const handleLeaveRoom = () => {

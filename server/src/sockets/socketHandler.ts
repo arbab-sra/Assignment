@@ -13,7 +13,7 @@ export function setupSocketHandlers(io: Server) {
     // 1. Join Room
     socket.on(
       "join_room",
-      async ({ roomId, username }: { roomId: string; username: string }) => {
+      async ({ roomId, username, userId }: { roomId: string; username: string; userId?: string }) => {
         const code = (roomId || "default").toUpperCase();
         const room = await roomManager.getOrCreateRoom(code);
 
@@ -33,9 +33,16 @@ export function setupSocketHandlers(io: Server) {
                 socketId: participant.socketId,
                 username: participant.username,
                 role: participant.role,
+                userId: userId || null,
                 roomId: dbRoom.id,
               },
             });
+            if (userId && participant.role === "HOST") {
+              await prisma.room.update({
+                where: { id: dbRoom.id },
+                data: { hostUserId: userId },
+              });
+            }
           }
         } catch (e) {
           // Fallback if DB is unavailable

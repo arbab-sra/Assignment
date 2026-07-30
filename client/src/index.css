@@ -72,6 +72,11 @@ body {
   border-color: rgba(180, 225, 235, 0.25);
 }
 
+.recent-room-item:hover {
+  background: rgba(180, 225, 235, 0.12) !important;
+  border-color: rgba(180, 225, 235, 0.4) !important;
+}
+
 .glass-input {
   background: rgba(9, 14, 23, 0.7);
   border: 1px solid var(--glass-border);

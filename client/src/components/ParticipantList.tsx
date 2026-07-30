@@ -112,7 +112,7 @@ export const ParticipantList: React.FC<Props> = ({
                       border: '1px solid var(--glass-border)',
                       borderRadius: '6px',
                       padding: '4px 6px',
-                      fontSize: '11px',
+                      fontSize: '24px',
                       outline: 'none',
                       cursor: 'pointer',
                     }}
