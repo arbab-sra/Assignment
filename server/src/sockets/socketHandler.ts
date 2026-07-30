@@ -2,6 +2,7 @@ import { Server, Socket } from "socket.io";
 import { RoomManager } from "../models/RoomManager";
 import { Participant } from "../models/Participant";
 import { Role } from "../utility/types";
+import { prisma } from "../utility/db";
 
 export function setupSocketHandlers(io: Server) {
   const roomManager = RoomManager.getInstance();
@@ -22,6 +23,23 @@ export function setupSocketHandlers(io: Server) {
           username || `User_${socket.id.substring(0, 4)}`,
         );
         room.addParticipant(participant);
+
+        // Save Participant to DB asynchronously
+        try {
+          const dbRoom = await prisma.room.findUnique({ where: { code: room.code } });
+          if (dbRoom) {
+            await prisma.participant.create({
+              data: {
+                socketId: participant.socketId,
+                username: participant.username,
+                role: participant.role,
+                roomId: dbRoom.id,
+              },
+            });
+          }
+        } catch (e) {
+          // Fallback if DB is unavailable
+        }
 
         // Join socket.io channel
         socket.join(room.code);
@@ -265,7 +283,7 @@ export function setupSocketHandlers(io: Server) {
     );
 
     // 9. Chat Message
-    socket.on("send_message", ({ text }: { text: string }) => {
+    socket.on("send_message", async ({ text }: { text: string }) => {
       const room = roomManager.findRoomBySocketId(socket.id);
       if (!room) return;
 
@@ -274,6 +292,22 @@ export function setupSocketHandlers(io: Server) {
 
       const msg = room.addChatMessage(participant.username, text);
       io.to(room.code).emit("chat_message", msg);
+
+      // Save Chat Message to DB asynchronously
+      try {
+        const dbRoom = await prisma.room.findUnique({ where: { code: room.code } });
+        if (dbRoom) {
+          await prisma.chatMessage.create({
+            data: {
+              username: participant.username,
+              text: text,
+              roomId: dbRoom.id,
+            },
+          });
+        }
+      } catch (e) {
+        // Fallback if DB unavailable
+      }
     });
 
     // 10. Live Reaction
@@ -296,7 +330,7 @@ export function setupSocketHandlers(io: Server) {
     });
   });
 
-  function handleUserDisconnect(socket: Socket) {
+  async function handleUserDisconnect(socket: Socket) {
     const room = roomManager.findRoomBySocketId(socket.id);
     if (!room) return;
 
@@ -304,6 +338,13 @@ export function setupSocketHandlers(io: Server) {
     if (removedParticipant) {
       console.log(`🚪 ${removedParticipant.username} left room [${room.code}]`);
       socket.leave(room.code);
+
+      // Clean up Participant from DB asynchronously
+      try {
+        await prisma.participant.deleteMany({
+          where: { socketId: socket.id },
+        });
+      } catch (e) {}
 
       io.to(room.code).emit("user_left", {
         username: removedParticipant.username,

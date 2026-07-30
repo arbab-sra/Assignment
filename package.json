@@ -1,0 +1,10 @@
+{
+  "name": "syncbits-watch-party",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time synchronized YouTube Watch Party System",
+  "scripts": {
+    "dev": "node start-dev.js",
+    "start": "node start-dev.js"
+  }
+}
