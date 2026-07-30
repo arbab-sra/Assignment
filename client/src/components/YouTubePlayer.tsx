@@ -147,6 +147,9 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
     }
   }, [videoState]);
 
+  // Detect mobile touch devices (iOS Safari / Android Chrome)
+  const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0));
+
   // Periodic progress bar update and adaptive participant catch-up sync
   useEffect(() => {
     const interval = setInterval(() => {
@@ -155,37 +158,41 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
         setCurrentTime(cur);
         setDuration(playerRef.current.getDuration());
 
-        // For participants: Adaptive Playback Rate Catch-up (sub-150ms sync without buffering)
+        // For participants: Adaptive Sync (sub-150ms on desktop, direct threshold on mobile)
         if (!canControl && lastStateRef.current && !isSyncingRef.current) {
           const state = lastStateRef.current;
           const player = playerRef.current;
-          if (state.isPlaying && player && player.setPlaybackRate) {
+          if (state.isPlaying && player) {
             const transitTime = state.serverTimestamp
               ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
               : (Date.now() - stateReceivedAtRef.current) / 1000;
             const expected = state.currentTime + transitTime;
             const diff = expected - cur; // Positive = participant is behind host
 
-            if (Math.abs(diff) > 1.2) {
-              // Large drift (> 1.2s): seek directly to expected position
-              player.seekTo(expected, true);
-              player.setPlaybackRate(1.0);
-            } else if (diff > 0.15) {
-              // Slightly behind host (150ms - 1.2s): speed up by 8% to catch up seamlessly
-              player.setPlaybackRate(1.08);
-            } else if (diff < -0.15) {
-              // Slightly ahead of host (-150ms - -1.2s): slow down by 8% to let host align
-              player.setPlaybackRate(0.92);
-            } else {
-              // Perfectly in sync (< 150ms difference): normal 1.0x playback rate
-              player.setPlaybackRate(1.0);
+            if (isMobile) {
+              // Mobile WebKit decoders spin a buffer wheel if setPlaybackRate is changed frequently
+              if (player.setPlaybackRate) player.setPlaybackRate(1.0);
+              if (Math.abs(diff) > 1.2 && player.seekTo) {
+                player.seekTo(expected, true);
+              }
+            } else if (player.setPlaybackRate) {
+              if (Math.abs(diff) > 1.2) {
+                player.seekTo(expected, true);
+                player.setPlaybackRate(1.0);
+              } else if (diff > 0.15) {
+                player.setPlaybackRate(1.08);
+              } else if (diff < -0.15) {
+                player.setPlaybackRate(0.92);
+              } else {
+                player.setPlaybackRate(1.0);
+              }
             }
           }
         }
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [canControl]);
+  }, [canControl, isMobile]);
 
   // Handle local YouTube Player state change (if user clicks iframe directly)
   const handleStateChange: YouTubeProps['onStateChange'] = (event) => {
@@ -244,6 +251,11 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
       controls: canControl ? 1 : 0, // Disable player controls for participants
       modestbranding: 1,
       rel: 0,
+      playsinline: 1, // CRITICAL FOR MOBILE SAFARI & CHROME INLINE PLAYBACK WITHOUT SPINNER
+      enablejsapi: 1,
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
+      widget_referrer: typeof window !== 'undefined' ? window.location.origin : '',
+      fs: 1,
     },
   };
 
