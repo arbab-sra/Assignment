@@ -310,10 +310,17 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
                   type="button"
                   className="btn-primary"
                   onClick={() => {
-                    const time = playerRef.current?.getCurrentTime() || 0;
-                    if (isPlayingLocally) {
+                    const player = playerRef.current;
+                    const time = player?.getCurrentTime ? player.getCurrentTime() : currentTime;
+                    const isCurrentlyPlaying = player?.getPlayerState ? player.getPlayerState() === 1 : isPlayingLocally;
+
+                    if (isCurrentlyPlaying) {
+                      if (player?.pauseVideo) player.pauseVideo();
+                      setIsPlayingLocally(false);
                       onPause(time);
                     } else {
+                      if (player?.playVideo) player.playVideo();
+                      setIsPlayingLocally(true);
                       onPlay(time);
                     }
                   }}
