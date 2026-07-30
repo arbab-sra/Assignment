@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Sparkles, Video, ArrowRight } from 'lucide-react';
+import { Users, Sparkles, Video, ArrowRight, Loader2 } from 'lucide-react';
 
 interface Props {
   onJoinRoom: (username: string, roomCode: string) => void;
@@ -10,10 +10,11 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
   const [username, setUsername] = useState('');
   const [roomCode, setRoomCode] = useState(defaultRoomCode);
   const [mode, setMode] = useState<'JOIN' | 'CREATE'>('JOIN');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim()) return;
+    if (!username.trim() || isLoading) return;
 
     let targetCode = roomCode.trim().toUpperCase();
     if (mode === 'CREATE') {
@@ -21,6 +22,8 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
     }
 
     if (!targetCode) return;
+
+    setIsLoading(true);
     onJoinRoom(username.trim(), targetCode);
   };
 
@@ -193,6 +196,7 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
 
           <button
             type="submit"
+            disabled={isLoading}
             className="btn-primary"
             style={{
               width: "100%",
@@ -200,9 +204,16 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
               padding: "14px",
               marginTop: "8px",
               fontSize: "15px",
+              opacity: isLoading ? 0.75 : 1,
+              cursor: isLoading ? "not-allowed" : "pointer",
             }}
           >
-            {mode === "CREATE" ? (
+            {isLoading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                {mode === "CREATE" ? "Creating Room..." : "Joining Room..."}
+              </>
+            ) : mode === "CREATE" ? (
               <>
                 <Sparkles size={18} /> Create & Host Watch Party
               </>
