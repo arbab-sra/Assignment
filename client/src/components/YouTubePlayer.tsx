@@ -147,7 +147,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
     }
   }, [videoState]);
 
-  // Periodic progress bar update and participant runtime drift auto-correction
+  // Periodic progress bar update and adaptive participant catch-up sync
   useEffect(() => {
     const interval = setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime) {
@@ -155,22 +155,35 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
         setCurrentTime(cur);
         setDuration(playerRef.current.getDuration());
 
-        // For participants: auto-correct playback drift during continuous runtime
+        // For participants: Adaptive Playback Rate Catch-up (sub-150ms sync without buffering)
         if (!canControl && lastStateRef.current && !isSyncingRef.current) {
           const state = lastStateRef.current;
-          if (state.isPlaying) {
-            const elapsed = (Date.now() - stateReceivedAtRef.current) / 1000;
-            const expected = state.currentTime + elapsed;
-            const drift = Math.abs(cur - expected);
+          const player = playerRef.current;
+          if (state.isPlaying && player && player.setPlaybackRate) {
+            const transitTime = state.serverTimestamp
+              ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
+              : (Date.now() - stateReceivedAtRef.current) / 1000;
+            const expected = state.currentTime + transitTime;
+            const diff = expected - cur; // Positive = participant is behind host
 
-            // If drift exceeds 0.8s, perform seamless micro-seek to align with Host
-            if (drift > 0.8) {
-              playerRef.current.seekTo(expected, true);
+            if (Math.abs(diff) > 1.2) {
+              // Large drift (> 1.2s): seek directly to expected position
+              player.seekTo(expected, true);
+              player.setPlaybackRate(1.0);
+            } else if (diff > 0.15) {
+              // Slightly behind host (150ms - 1.2s): speed up by 8% to catch up seamlessly
+              player.setPlaybackRate(1.08);
+            } else if (diff < -0.15) {
+              // Slightly ahead of host (-150ms - -1.2s): slow down by 8% to let host align
+              player.setPlaybackRate(0.92);
+            } else {
+              // Perfectly in sync (< 150ms difference): normal 1.0x playback rate
+              player.setPlaybackRate(1.0);
             }
           }
         }
       }
-    }, 1000);
+    }, 500);
     return () => clearInterval(interval);
   }, [canControl]);
 
