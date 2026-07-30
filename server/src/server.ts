@@ -12,7 +12,6 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-
 const rawClientUrl = process.env.CLIENT_URL || "*";
 const CORS_ORIGIN = rawClientUrl === "*" ? "*" : rawClientUrl.replace(/\/+$/, "");
 
@@ -29,6 +28,10 @@ const io = new Server(server, {
 // Setup Socket.IO Event Handlers
 setupSocketHandlers(io);
 
+// Root & Health Check Endpoints for Railway
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "YouTube Watch Party API is running" });
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -44,11 +47,11 @@ app.get("/api/rooms/:code", (req, res) => {
   return res.json(room.toJSON());
 });
 
-const PORT = process.env.PORT || 5001;
+const PORT = Number(process.env.PORT) || 5001;
 
-server.listen(PORT, async () => {
-  await initDB();
+server.listen(PORT, "0.0.0.0", () => {
+  initDB().catch((err) => console.error("Database connection warning:", err));
   console.log(
-    `🚀 YouTube Watch Party Server running on http://localhost:${PORT}`,
+    `🚀 YouTube Watch Party Server running on port ${PORT}`,
   );
 });
