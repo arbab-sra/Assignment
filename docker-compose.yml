@@ -1,22 +1,4 @@
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: watchparty_postgres
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: watchpartydb
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d watchpartydb"]
-      interval: 3s
-      timeout: 3s
-      retries: 5
-
   backend:
     build:
       context: ./server
@@ -25,12 +7,7 @@ services:
     restart: always
     ports:
       - "5001:5001"
+    env_file:
+      - ./server/.env
     environment:
       PORT: 5001
-      DATABASE_URL: "postgresql://postgres:postgrespassword@postgres:5432/watchpartydb?schema=public"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-volumes:
-  postgres_data:
