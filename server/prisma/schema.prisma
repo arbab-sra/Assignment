@@ -11,7 +11,7 @@ model Room {
   id           String        @id @default(uuid())
   code         String        @unique
   name         String        @default("Watch Party Room")
-  videoId      String        @default("dQw4w9WgXcQ") // Default video
+  videoId      String        @default("oafxkMv4xnc") //https://youtu.be/oafxkMv4xnc?si=6OWzd8vU_U__IOWP Default video
   currentTime  Float         @default(0)
   isPlaying    Boolean       @default(false)
   createdAt    DateTime      @default(now())

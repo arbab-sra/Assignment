@@ -11,6 +11,8 @@ export interface VideoState {
   videoId: string;
   currentTime: number;
   isPlaying: boolean;
+  serverTimestamp?: number;
+  senderSocketId?: string;
 }
 
 export interface ChatMessageData {

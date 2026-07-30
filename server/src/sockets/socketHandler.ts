@@ -63,10 +63,15 @@ export function setupSocketHandlers(io: Server) {
       }
 
       room.updateVideoState(undefined, currentTime, true);
-      io.to(room.code).emit("play", {
+      const payload = {
         currentTime: room.currentTime,
         isPlaying: true,
-      });
+        serverTimestamp: Date.now(),
+        senderSocketId: socket.id,
+      };
+
+      // Broadcast to participants immediately without echoing back to acting host
+      socket.broadcast.to(room.code).emit("play", payload);
     });
 
     // 4. Pause Video
@@ -82,10 +87,14 @@ export function setupSocketHandlers(io: Server) {
       }
 
       room.updateVideoState(undefined, currentTime, false);
-      io.to(room.code).emit("pause", {
+      const payload = {
         currentTime: room.currentTime,
         isPlaying: false,
-      });
+        serverTimestamp: Date.now(),
+        senderSocketId: socket.id,
+      };
+
+      socket.broadcast.to(room.code).emit("pause", payload);
     });
 
     // 5. Seek Video
@@ -101,7 +110,14 @@ export function setupSocketHandlers(io: Server) {
       }
 
       room.updateVideoState(undefined, time, undefined);
-      io.to(room.code).emit("seek", { time: room.currentTime });
+      const payload = {
+        currentTime: room.currentTime,
+        isPlaying: room.isPlaying,
+        serverTimestamp: Date.now(),
+        senderSocketId: socket.id,
+      };
+
+      socket.broadcast.to(room.code).emit("seek", payload);
     });
 
     // 6. Change Video
@@ -125,19 +141,62 @@ export function setupSocketHandlers(io: Server) {
         );
       }
 
-      room.updateVideoState(extractedId, 0, true);
+      // When video changes, reset room to PAUSED state at time 0 so all users cue up in sync
+      room.updateVideoState(extractedId, 0, false);
 
-      io.to(room.code).emit("change_video", {
+      const payload = {
         videoId: room.videoId,
         currentTime: 0,
-        isPlaying: true,
-      });
+        isPlaying: false,
+        serverTimestamp: Date.now(),
+        senderSocketId: socket.id,
+      };
+
+      io.to(room.code).emit("change_video", payload);
 
       // System notification in chat
       const sysMsg = room.addChatMessage(
         "System",
         `Video changed to "${extractedId}"`,
       );
+      io.to(room.code).emit("chat_message", sysMsg);
+    });
+
+    // 7. Request Sync (Participant-initiated manual sync)
+    socket.on("request_sync", () => {
+      const room = roomManager.findRoomBySocketId(socket.id);
+      if (!room) return;
+
+      const state = room.getVideoState();
+      socket.emit("sync_state", {
+        ...state,
+        serverTimestamp: Date.now(),
+        senderSocketId: "SERVER",
+      });
+    });
+
+    // 8. Force Sync All (Host-initiated manual sync across room)
+    socket.on("force_sync_all", () => {
+      const room = roomManager.findRoomBySocketId(socket.id);
+      if (!room) return;
+
+      if (!room.canUserControl(socket.id)) {
+        return socket.emit(
+          "error_message",
+          "Permission denied: Only Host or Moderator can force sync all.",
+        );
+      }
+
+      const state = room.getVideoState();
+      const payload = {
+        ...state,
+        serverTimestamp: Date.now(),
+        senderSocketId: socket.id,
+      };
+
+      io.to(room.code).emit("sync_state", payload);
+
+      const sysMsg = room.addChatMessage("System", "Host triggered a room-wide sync!");
       io.to(room.code).emit("chat_message", sysMsg);
     });
 

@@ -68,8 +68,8 @@ export const ParticipantList: React.FC<Props> = ({
                 justifyContent: 'space-between',
                 padding: '10px 12px',
                 borderRadius: '10px',
-                background: isSelf ? 'rgba(121, 40, 202, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                border: isSelf ? '1px solid rgba(121, 40, 202, 0.3)' : '1px solid var(--glass-border)',
+                background: isSelf ? 'rgba(180, 225, 235, 0.12)' : 'rgba(9, 14, 23, 0.4)',
+                border: isSelf ? '1px solid rgba(180, 225, 235, 0.35)' : '1px solid var(--glass-border)',
               }}
             >
               {/* Left: Username & Badge */}

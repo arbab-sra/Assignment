@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import YouTube, { YouTubeProps, YouTubePlayer as YTPlayer } from 'react-youtube';
 import toast from 'react-hot-toast';
-import { Play, Pause, RotateCcw, Link2, Lock } from 'lucide-react';
+import { Play, Pause, RotateCcw, Link2, Lock, RefreshCw } from 'lucide-react';
 import { VideoState } from '../types';
 
 interface Props {
@@ -11,6 +11,9 @@ interface Props {
   onPause: (currentTime: number) => void;
   onSeek: (time: number) => void;
   onChangeVideo: (urlOrId: string) => void;
+  onRequestSync?: () => void;
+  onForceSyncAll?: () => void;
+  currentSocketId?: string;
 }
 
 export const YouTubePlayerComponent: React.FC<Props> = ({
@@ -20,6 +23,9 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   onPause,
   onSeek,
   onChangeVideo,
+  onRequestSync,
+  onForceSyncAll,
+  currentSocketId,
 }) => {
   const playerRef = useRef<YTPlayer | null>(null);
   const [newVideoUrl, setNewVideoUrl] = useState('');
@@ -47,10 +53,21 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   const syncPlayerWithVideoState = (player: YTPlayer | null, state: VideoState) => {
     if (!player || !player.getPlayerState) return;
 
+    // Echo suppression for sender socket to avoid double-pause or back-seeking on acting Host
+    if (state.senderSocketId && currentSocketId && state.senderSocketId === currentSocketId) {
+      return;
+    }
+
     isSyncingRef.current = true;
 
     const validId = extractVideoId(state.videoId) || 'dQw4w9WgXcQ';
-    const elapsed = state.isPlaying ? (Date.now() - stateReceivedAtRef.current) / 1000 : 0;
+    
+    // Sub-200ms Network Transit Time Compensation
+    const transitTime = state.serverTimestamp
+      ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
+      : (Date.now() - stateReceivedAtRef.current) / 1000;
+    
+    const elapsed = state.isPlaying ? transitTime : 0;
     const expectedTime = state.currentTime + elapsed;
 
     // 1. Video ID sync
@@ -62,19 +79,31 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
             videoId: validId,
             startSeconds: expectedTime,
           });
+          setIsPlayingLocally(true);
         } else {
           player.cueVideoById({
             videoId: validId,
             startSeconds: expectedTime,
           });
+          if (player.pauseVideo) {
+            player.pauseVideo();
+          }
+          setIsPlayingLocally(false);
         }
       } catch (e) {
         console.warn('Error loading video:', e);
       }
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 1500);
+      return;
     } else {
-      // 2. High-precision timestamp seek sync (if drift > 0.5s)
+      // 2. Timestamp seek sync with refined drift thresholds
       const curTime = player.getCurrentTime ? player.getCurrentTime() : 0;
-      if (Math.abs(curTime - expectedTime) > 0.5) {
+      const drift = Math.abs(curTime - expectedTime);
+      const threshold = state.isPlaying ? 0.8 : 1.5; // Relax threshold when paused to avoid jitter
+      
+      if (drift > threshold) {
         player.seekTo(expectedTime, true);
       }
     }
@@ -93,7 +122,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
 
     setTimeout(() => {
       isSyncingRef.current = false;
-    }, 500);
+    }, 600);
   };
 
   // Ready handler (triggers immediately when player mounts)
@@ -303,10 +332,36 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
                 >
                   <RotateCcw size={16} /> Rewind
                 </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    if (onForceSyncAll) onForceSyncAll();
+                    toast.success("Broadcasted Sync All to participants!");
+                  }}
+                  title="Force sync all participants in room"
+                  style={{ background: 'rgba(180, 225, 235, 0.15)', color: 'var(--color-cyan)', borderColor: 'rgba(180, 225, 235, 0.3)' }}
+                >
+                  <RefreshCw size={15} /> Sync All
+                </button>
               </>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                <Lock size={16} /> View Only Mode (Host/Moderator controls video)
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    if (onRequestSync) onRequestSync();
+                    if (playerRef.current) syncPlayerWithVideoState(playerRef.current, videoState);
+                  }}
+                  title="Click to sync your video instantly with the Host"
+                  style={{ padding: '8px 14px', fontSize: '13px' }}
+                >
+                  <RefreshCw size={15} /> Sync with Host
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  <Lock size={15} /> Controlled by Host
+                </div>
               </div>
             )}
           </div>
