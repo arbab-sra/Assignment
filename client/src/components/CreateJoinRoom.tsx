@@ -32,21 +32,20 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
         justifyContent: "center",
         minHeight: "100vh",
         padding: "24px",
+        position: "relative",
+        background:
+          "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(249, 115, 22, 0.25), transparent 70%), #000000",
+        overflow: "hidden",
       }}
     >
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(249, 115, 22, 0.25), transparent 70%), #000000",
-        }}
-      />
       <div
         className="glass-panel"
         style={{
           maxWidth: "460px",
           width: "100%",
           padding: "36px",
+          position: "relative",
+          zIndex: 10,
           boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
         }}
       >
