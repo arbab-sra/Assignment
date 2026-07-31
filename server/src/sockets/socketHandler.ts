@@ -10,6 +10,11 @@ export function setupSocketHandlers(io: Server) {
   io.on("connection", (socket: Socket) => {
     console.log(`🔌 Client connected: ${socket.id}`);
 
+    // Ping check for real-time network latency measurement
+    socket.on("ping_check", (clientTimestamp: number) => {
+      socket.emit("pong_check", clientTimestamp);
+    });
+
     // 1. Join Room
     socket.on(
       "join_room",
@@ -362,6 +367,8 @@ export function setupSocketHandlers(io: Server) {
       });
     }
   }
+
+
 
   // Helper to extract & validate 11-character YouTube video ID
   function parseYouTubeVideoId(urlOrId: string): string | null {

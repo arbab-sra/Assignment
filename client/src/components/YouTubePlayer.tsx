@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import YouTube, { YouTubeProps, YouTubePlayer as YTPlayer } from 'react-youtube';
 import toast from 'react-hot-toast';
-import { Play, Pause, RotateCcw, Link2, Lock, RefreshCw } from 'lucide-react';
+import { Play, Pause, RotateCcw, Link2, Lock, RefreshCw, Zap } from 'lucide-react';
 import { VideoState } from '../types';
+import { socket } from '../services/socket';
 
 interface Props {
   videoState: VideoState;
@@ -32,7 +33,36 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   const [isPlayingLocally, setIsPlayingLocally] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [latencyMs, setLatencyMs] = useState(15);
+  const [syncDriftMs, setSyncDriftMs] = useState(0);
   const isSyncingRef = useRef(false);
+
+  // Live network latency measurement via WebSocket ping/pong
+  useEffect(() => {
+    const handlePong = (clientTimestamp: number) => {
+      const rtt = Date.now() - clientTimestamp;
+      const oneWayLatency = Math.max(1, Math.round(rtt / 2));
+      setLatencyMs(oneWayLatency);
+    };
+
+    socket.on('pong_check', handlePong);
+
+    // Initial ping
+    if (socket.connected) {
+      socket.emit('ping_check', Date.now());
+    }
+
+    const interval = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('ping_check', Date.now());
+      }
+    }, 2000);
+
+    return () => {
+      socket.off('pong_check', handlePong);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Helper to extract 11-char YouTube ID on client
   const extractVideoId = (urlOrId: string): string | null => {
@@ -66,7 +96,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
     const transitTime = state.serverTimestamp
       ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
       : (Date.now() - stateReceivedAtRef.current) / 1000;
-    
+
     const elapsed = state.isPlaying ? transitTime : 0;
     const expectedTime = state.currentTime + elapsed;
 
@@ -168,6 +198,8 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
               : (Date.now() - stateReceivedAtRef.current) / 1000;
             const expected = state.currentTime + transitTime;
             const diff = expected - cur; // Positive = participant is behind host
+
+            setSyncDriftMs(Math.round(Math.abs(diff) * 1000));
 
             if (isMobile) {
               // Mobile WebKit decoders spin a buffer wheel if setPlaybackRate is changed frequently
@@ -398,9 +430,35 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
             )}
           </div>
 
-          {/* Time display */}
-          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            {formatTime(currentTime)} / {formatTime(duration)}
+          {/* Latency & Time display */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 9px',
+                borderRadius: '12px',
+                background: 'rgba(9, 14, 23, 0.6)',
+                border: '1px solid var(--glass-border)',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: latencyMs < 200 ? '#4ade80' : '#f87171',
+              }}
+              title="Live Network Latency & Frame Sync Accuracy"
+            >
+              <Zap size={12} />
+              <span>{latencyMs}ms latency</span>
+              {!canControl && (
+                <>
+                  <span style={{ color: 'var(--text-muted)' }}>•</span>
+                  <span style={{ color: 'var(--color-cyan)' }}>{syncDriftMs}ms drift</span>
+                </>
+              )}
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
           </div>
         </div>
 
