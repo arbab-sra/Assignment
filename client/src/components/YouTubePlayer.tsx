@@ -188,19 +188,20 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
         setCurrentTime(cur);
         setDuration(playerRef.current.getDuration());
 
-        // For participants: Adaptive Sync (sub-150ms on desktop, direct threshold on mobile)
-        if (!canControl && lastStateRef.current && !isSyncingRef.current) {
+        // Always calculate live drift relative to latest room videoState for all roles
+        if (lastStateRef.current && playerRef.current) {
           const state = lastStateRef.current;
-          const player = playerRef.current;
-          if (state.isPlaying && player) {
-            const transitTime = state.serverTimestamp
-              ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
-              : (Date.now() - stateReceivedAtRef.current) / 1000;
-            const expected = state.currentTime + transitTime;
-            const diff = expected - cur; // Positive = participant is behind host
+          const transitTime = state.serverTimestamp
+            ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
+            : (Date.now() - stateReceivedAtRef.current) / 1000;
+          const expected = state.currentTime + (state.isPlaying ? transitTime : 0);
+          const diff = expected - cur; // Positive = behind host
 
-            setSyncDriftMs(Math.round(Math.abs(diff) * 1000));
+          setSyncDriftMs(Math.round(Math.abs(diff) * 1000));
 
+          // For non-controllers (Participants), apply adaptive speed adjustment
+          if (!canControl && state.isPlaying && !isSyncingRef.current) {
+            const player = playerRef.current;
             if (isMobile) {
               // Mobile WebKit decoders spin a buffer wheel if setPlaybackRate is changed frequently
               if (player.setPlaybackRate) player.setPlaybackRate(1.0);
@@ -449,12 +450,8 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
             >
               <Zap size={12} />
               <span>{latencyMs}ms latency</span>
-              {!canControl && (
-                <>
-                  <span style={{ color: 'var(--text-muted)' }}>•</span>
-                  <span style={{ color: 'var(--color-cyan)' }}>{syncDriftMs}ms drift</span>
-                </>
-              )}
+              <span style={{ color: 'var(--text-muted)' }}>•</span>
+              <span style={{ color: 'var(--color-cyan)' }}>{syncDriftMs}ms drift</span>
             </div>
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>
               {formatTime(currentTime)} / {formatTime(duration)}
