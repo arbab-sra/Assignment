@@ -346,7 +346,10 @@ export function setupSocketHandlers(io: Server) {
     const room = roomManager.findRoomBySocketId(socket.id);
     if (!room) return;
 
+    const disconnectingParticipant = room.getParticipant(socket.id);
+    const wasHost = disconnectingParticipant?.role === "HOST";
     const removedParticipant = room.removeParticipant(socket.id);
+
     if (removedParticipant) {
       console.log(`🚪 ${removedParticipant.username} left room [${room.code}]`);
       socket.leave(room.code);
@@ -358,13 +361,38 @@ export function setupSocketHandlers(io: Server) {
         });
       } catch (e) {}
 
+      const remainingParticipants = Array.from(room.participants.values());
+
+      // If host left and participants remain, transfer Host to next user
+      if (wasHost && remainingParticipants.length > 0) {
+        const newHost = room.getHost();
+        if (newHost) {
+          try {
+            await prisma.participant.updateMany({
+              where: { socketId: newHost.socketId },
+              data: { role: "HOST" },
+            });
+          } catch (e) {}
+
+          io.to(room.code).emit("role_assigned", {
+            username: newHost.username,
+            role: "HOST",
+            participants: remainingParticipants.map((p) => p.toJSON()),
+          });
+        }
+      }
+
+      // Broadcast user_left event with accurate remaining participants roster
       io.to(room.code).emit("user_left", {
         username: removedParticipant.username,
         userId: socket.id,
-        participants: Array.from(room.participants.values()).map((p) =>
-          p.toJSON(),
-        ),
+        participants: remainingParticipants.map((p) => p.toJSON()),
       });
+
+      // Clean up empty room if no participants remain
+      if (remainingParticipants.length === 0) {
+        roomManager.removeRoom(room.code);
+      }
     }
   }
 

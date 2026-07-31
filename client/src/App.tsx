@@ -92,15 +92,25 @@ export const App: React.FC = () => {
       ({
         currentTime,
         isPlaying,
+        serverTimestamp,
+        senderSocketId,
       }: {
         currentTime: number;
         isPlaying: boolean;
+        serverTimestamp?: number;
+        senderSocketId?: string;
       }) => {
         setRoomData((prev) =>
           prev
             ? {
                 ...prev,
-                videoState: { ...prev.videoState, currentTime, isPlaying },
+                videoState: {
+                  ...prev.videoState,
+                  currentTime,
+                  isPlaying,
+                  serverTimestamp,
+                  senderSocketId,
+                },
               }
             : null,
         );
@@ -111,32 +121,61 @@ export const App: React.FC = () => {
       "pause",
       ({
         currentTime,
-        isPlaying,
+        isPlaying = false,
+        serverTimestamp,
+        senderSocketId,
       }: {
         currentTime: number;
-        isPlaying: boolean;
+        isPlaying?: boolean;
+        serverTimestamp?: number;
+        senderSocketId?: string;
       }) => {
         setRoomData((prev) =>
           prev
             ? {
                 ...prev,
-                videoState: { ...prev.videoState, currentTime, isPlaying },
+                videoState: {
+                  ...prev.videoState,
+                  currentTime,
+                  isPlaying,
+                  serverTimestamp,
+                  senderSocketId,
+                },
               }
             : null,
         );
       },
     );
 
-    socket.on("seek", ({ time }: { time: number }) => {
-      setRoomData((prev) =>
-        prev
-          ? {
-              ...prev,
-              videoState: { ...prev.videoState, currentTime: time },
-            }
-          : null,
-      );
-    });
+    socket.on(
+      "seek",
+      ({
+        currentTime,
+        time,
+        serverTimestamp,
+        senderSocketId,
+      }: {
+        currentTime?: number;
+        time?: number;
+        serverTimestamp?: number;
+        senderSocketId?: string;
+      }) => {
+        const seekTime = time !== undefined ? time : currentTime || 0;
+        setRoomData((prev) =>
+          prev
+            ? {
+                ...prev,
+                videoState: {
+                  ...prev.videoState,
+                  currentTime: seekTime,
+                  serverTimestamp,
+                  senderSocketId,
+                },
+              }
+            : null,
+        );
+      },
+    );
 
     socket.on("change_video", (videoState: VideoState) => {
       setRoomData((prev) => (prev ? { ...prev, videoState } : null));
@@ -250,6 +289,10 @@ export const App: React.FC = () => {
       socket.disconnect();
     });
 
+    socket.on("connect_error", () => {
+      toast.error("Could not connect to backend server. Please verify backend server is running.", { id: "conn_err" });
+    });
+
     socket.on("error_message", (msg: string) => {
       toast.error(msg, {
         style: {
@@ -286,6 +329,7 @@ export const App: React.FC = () => {
       socket.off("reaction");
       socket.off("kicked");
       socket.off("error_message");
+      socket.off("connect_error");
     };
   }, []);
 

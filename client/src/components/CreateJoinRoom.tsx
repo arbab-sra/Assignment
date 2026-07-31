@@ -147,6 +147,9 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
 
     setIsLoading(true);
     onJoinRoom(username.trim(), targetCode, authUser?.id);
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 6000);
   };
 
   const handleRejoinRecent = (item: RecentRoom) => {
@@ -160,6 +163,9 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
     saveToRecentRooms(item.code, false);
     setIsLoading(true);
     onJoinRoom(activeUsername.trim(), item.code, authUser?.id);
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 6000);
   };
 
   return (

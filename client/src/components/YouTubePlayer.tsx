@@ -1,9 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import YouTube, { YouTubeProps, YouTubePlayer as YTPlayer } from 'react-youtube';
-import toast from 'react-hot-toast';
-import { Play, Pause, RotateCcw, Link2, Lock, RefreshCw, Zap } from 'lucide-react';
-import { VideoState } from '../types';
-import { socket } from '../services/socket';
+import React, { useEffect, useRef, useState } from "react";
+import YouTube, {
+  YouTubeProps,
+  YouTubePlayer as YTPlayer,
+} from "react-youtube";
+import toast from "react-hot-toast";
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Link2,
+  Lock,
+  RefreshCw,
+  Zap,
+} from "lucide-react";
+import { VideoState } from "../types";
+import { socket } from "../services/socket";
 
 interface Props {
   videoState: VideoState;
@@ -29,12 +40,13 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   currentSocketId,
 }) => {
   const playerRef = useRef<YTPlayer | null>(null);
-  const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [newVideoUrl, setNewVideoUrl] = useState("");
   const [isPlayingLocally, setIsPlayingLocally] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [latencyMs, setLatencyMs] = useState(15);
   const [syncDriftMs, setSyncDriftMs] = useState(0);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
   const isSyncingRef = useRef(false);
 
   // Live network latency measurement via WebSocket ping/pong
@@ -45,21 +57,21 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
       setLatencyMs(oneWayLatency);
     };
 
-    socket.on('pong_check', handlePong);
+    socket.on("pong_check", handlePong);
 
     // Initial ping
     if (socket.connected) {
-      socket.emit('ping_check', Date.now());
+      socket.emit("ping_check", Date.now());
     }
 
     const interval = setInterval(() => {
       if (socket.connected) {
-        socket.emit('ping_check', Date.now());
+        socket.emit("ping_check", Date.now());
       }
     }, 2000);
 
     return () => {
-      socket.off('pong_check', handlePong);
+      socket.off("pong_check", handlePong);
       clearInterval(interval);
     };
   }, []);
@@ -69,8 +81,15 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
     if (!urlOrId) return null;
     const str = urlOrId.trim();
     if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
-    const match = str.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
-    if (match && match[2] && match[2].length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(match[2])) {
+    const match = str.match(
+      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/,
+    );
+    if (
+      match &&
+      match[2] &&
+      match[2].length === 11 &&
+      /^[a-zA-Z0-9_-]{11}$/.test(match[2])
+    ) {
       return match[2];
     }
     return null;
@@ -80,18 +99,25 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   const lastStateRef = useRef<VideoState>(videoState);
 
   // Helper function to synchronize player with video state
-  const syncPlayerWithVideoState = (player: YTPlayer | null, state: VideoState) => {
+  const syncPlayerWithVideoState = (
+    player: YTPlayer | null,
+    state: VideoState,
+  ) => {
     if (!player || !player.getPlayerState) return;
 
     // Echo suppression for sender socket to avoid double-pause or back-seeking on acting Host
-    if (state.senderSocketId && currentSocketId && state.senderSocketId === currentSocketId) {
+    if (
+      state.senderSocketId &&
+      currentSocketId &&
+      state.senderSocketId === currentSocketId
+    ) {
       return;
     }
 
     isSyncingRef.current = true;
 
-    const validId = extractVideoId(state.videoId) || 'dQw4w9WgXcQ';
-    
+    const validId = extractVideoId(state.videoId) || "dQw4w9WgXcQ";
+
     // Sub-200ms Network Transit Time Compensation
     const transitTime = state.serverTimestamp
       ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
@@ -101,7 +127,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
     const expectedTime = state.currentTime + elapsed;
 
     // 1. Video ID sync
-    const currentVideoUrl = player.getVideoUrl ? player.getVideoUrl() : '';
+    const currentVideoUrl = player.getVideoUrl ? player.getVideoUrl() : "";
     if (validId && !currentVideoUrl.includes(validId)) {
       try {
         if (state.isPlaying) {
@@ -121,19 +147,18 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
           setIsPlayingLocally(false);
         }
       } catch (e) {
-        console.warn('Error loading video:', e);
+        console.warn("Error loading video:", e);
       }
       setTimeout(() => {
         isSyncingRef.current = false;
       }, 1500);
       return;
     } else {
-      // 2. Timestamp seek sync with refined drift thresholds
+      // 2. Timestamp seek sync: Force seek if drift exceeds 0.4s or when pausing
       const curTime = player.getCurrentTime ? player.getCurrentTime() : 0;
       const drift = Math.abs(curTime - expectedTime);
-      const threshold = state.isPlaying ? 0.8 : 1.5; // Relax threshold when paused to avoid jitter
-      
-      if (drift > threshold) {
+
+      if (drift > 0.4 || !state.isPlaying) {
         player.seekTo(expectedTime, true);
       }
     }
@@ -141,11 +166,16 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
     // 3. Play / Pause state sync
     const playerState = player.getPlayerState ? player.getPlayerState() : -1;
     if (state.isPlaying) {
+      const curTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+      if (Math.abs(curTime - expectedTime) > 0.4) {
+        player.seekTo(expectedTime, true);
+      }
       if (playerState !== 1) {
         player.playVideo();
         setIsPlayingLocally(true);
       }
     } else {
+      player.seekTo(expectedTime, true);
       player.pauseVideo();
       setIsPlayingLocally(false);
     }
@@ -156,16 +186,17 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   };
 
   // Ready handler (triggers immediately when player mounts)
-  const handleReady: YouTubeProps['onReady'] = (event) => {
+  const handleReady: YouTubeProps["onReady"] = (event) => {
     playerRef.current = event.target;
+    setIsPlayerReady(true);
     setDuration(event.target.getDuration());
     syncPlayerWithVideoState(event.target, videoState);
   };
 
   // Handle player playback or embedding errors without crashing page
-  const handleError: YouTubeProps['onError'] = (e) => {
-    console.warn('YouTube Player error code:', e?.data);
-    toast.error('Could not play video (private, deleted, or invalid link).');
+  const handleError: YouTubeProps["onError"] = (e) => {
+    console.warn("YouTube Player error code:", e?.data);
+    toast.error("Could not play video (private, deleted, or invalid link).");
   };
 
   // Synchronize player with external socket videoState changes
@@ -178,7 +209,10 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   }, [videoState]);
 
   // Detect mobile touch devices (iOS Safari / Android Chrome)
-  const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0));
+  const isMobile =
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window ||
+      (navigator.maxTouchPoints && navigator.maxTouchPoints > 0));
 
   // Periodic progress bar update and adaptive participant catch-up sync
   useEffect(() => {
@@ -194,7 +228,8 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
           const transitTime = state.serverTimestamp
             ? Math.max(0, (Date.now() - state.serverTimestamp) / 1000)
             : (Date.now() - stateReceivedAtRef.current) / 1000;
-          const expected = state.currentTime + (state.isPlaying ? transitTime : 0);
+          const expected =
+            state.currentTime + (state.isPlaying ? transitTime : 0);
           const diff = expected - cur; // Positive = behind host
 
           setSyncDriftMs(Math.round(Math.abs(diff) * 1000));
@@ -228,7 +263,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   }, [canControl, isMobile]);
 
   // Handle local YouTube Player state change (if user clicks iframe directly)
-  const handleStateChange: YouTubeProps['onStateChange'] = (event) => {
+  const handleStateChange: YouTubeProps["onStateChange"] = (event) => {
     if (isSyncingRef.current) return;
 
     if (!canControl) {
@@ -246,7 +281,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
     if (state === 1) {
       setIsPlayingLocally(true);
       onPlay(time);
-    } 
+    }
     // 2 = PAUSED
     else if (state === 2) {
       setIsPlayingLocally(false);
@@ -268,17 +303,19 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
 
     const extracted = extractVideoId(newVideoUrl.trim());
     if (!extracted) {
-      toast.error('Invalid YouTube URL or Video ID. Please enter a valid YouTube link.');
+      toast.error(
+        "Invalid YouTube URL or Video ID. Please enter a valid YouTube link.",
+      );
       return;
     }
 
     onChangeVideo(extracted);
-    setNewVideoUrl('');
+    setNewVideoUrl("");
   };
 
-  const opts: YouTubeProps['opts'] = {
-    height: '100%',
-    width: '100%',
+  const opts: YouTubeProps["opts"] = {
+    height: "100%",
+    width: "100%",
     playerVars: {
       autoplay: 0, // Controlled explicitly by syncPlayerWithVideoState
       controls: canControl ? 1 : 0, // Disable player controls for participants
@@ -286,8 +323,9 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
       rel: 0,
       playsinline: 1, // CRITICAL FOR MOBILE SAFARI & CHROME INLINE PLAYBACK WITHOUT SPINNER
       enablejsapi: 1,
-      origin: typeof window !== 'undefined' ? window.location.origin : '',
-      widget_referrer: typeof window !== 'undefined' ? window.location.origin : '',
+      origin: typeof window !== "undefined" ? window.location.origin : "",
+      widget_referrer:
+        typeof window !== "undefined" ? window.location.origin : "",
       fs: 1,
     },
   };
@@ -295,52 +333,81 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
+  const activeVideoId = extractVideoId(videoState.videoId) || 'oafxkMv4xnc';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        width: "100%",
+      }}
+    >
       {/* Video Container */}
       <div
         className="glass-panel"
         style={{
-          position: 'relative',
-          width: '100%',
-          paddingTop: '56.25%', // 16:9 ratio
-          overflow: 'hidden',
-          boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6)',
+          position: "relative",
+          width: "100%",
+          paddingTop: "56.25%", // 16:9 ratio
+          overflow: "hidden",
+          boxShadow: "0 12px 40px rgba(0, 0, 0, 0.6)",
+          background: "#000",
         }}
       >
+        {/* Initial Loading Poster (Visible ONLY before YouTube player is ready) */}
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 0,
             left: 0,
-            width: '100%',
-            height: '100%',
+            width: "100%",
+            height: "100%",
+            backgroundImage: `url(https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg)`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            opacity: isPlayerReady ? 0 : 1,
+            pointerEvents: "none",
+            transition: "opacity 0.4s ease",
+            zIndex: 4,
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 1,
           }}
         >
           <YouTube
-            videoId={videoState.videoId}
+            videoId={activeVideoId}
             opts={opts}
             onReady={handleReady}
             onError={handleError}
             onStateChange={handleStateChange}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: "100%", height: "100%" }}
           />
 
           {/* Transparent Overlay Shield for Participants to block all video clicks */}
           {!canControl && (
             <div
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 0,
                 left: 0,
-                width: '100%',
-                height: '100%',
+                width: "100%",
+                height: "100%",
                 zIndex: 20,
-                background: 'transparent',
-                cursor: 'default',
+                background: "transparent",
+                cursor: "default",
               }}
               title="Playback control is restricted to Host & Moderator"
             />
@@ -352,16 +419,24 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
       <div
         className="glass-panel"
         style={{
-          padding: '16px 20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
+          padding: "16px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
         }}
       >
         {/* Top Control row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
           {/* Playback buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {canControl ? (
               <>
                 <button
@@ -369,8 +444,12 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
                   className="btn-primary"
                   onClick={() => {
                     const player = playerRef.current;
-                    const time = player?.getCurrentTime ? player.getCurrentTime() : currentTime;
-                    const isCurrentlyPlaying = player?.getPlayerState ? player.getPlayerState() === 1 : isPlayingLocally;
+                    const time = player?.getCurrentTime
+                      ? player.getCurrentTime()
+                      : currentTime;
+                    const isCurrentlyPlaying = player?.getPlayerState
+                      ? player.getPlayerState() === 1
+                      : isPlayingLocally;
 
                     if (isCurrentlyPlaying) {
                       if (player?.pauseVideo) player.pauseVideo();
@@ -384,7 +463,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
                   }}
                 >
                   {isPlayingLocally ? <Pause size={18} /> : <Play size={18} />}
-                  {isPlayingLocally ? 'Pause' : 'Play'}
+                  {isPlayingLocally ? "Pause" : "Play"}
                 </button>
                 <button
                   type="button"
@@ -405,26 +484,46 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
                     toast.success("Broadcasted Sync All to participants!");
                   }}
                   title="Force sync all participants in room"
-                  style={{ background: 'rgba(180, 225, 235, 0.15)', color: 'var(--color-cyan)', borderColor: 'rgba(180, 225, 235, 0.3)' }}
+                  style={{
+                    background: "rgba(180, 225, 235, 0.15)",
+                    color: "var(--color-cyan)",
+                    borderColor: "rgba(180, 225, 235, 0.3)",
+                  }}
                 >
                   <RefreshCw size={15} /> Sync All
                 </button>
               </>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
                 <button
                   type="button"
                   className="btn-primary"
                   onClick={() => {
                     if (onRequestSync) onRequestSync();
-                    if (playerRef.current) syncPlayerWithVideoState(playerRef.current, videoState);
+                    if (playerRef.current)
+                      syncPlayerWithVideoState(playerRef.current, videoState);
                   }}
                   title="Click to sync your video instantly with the Host"
-                  style={{ padding: '8px 14px', fontSize: '13px' }}
+                  style={{ padding: "8px 14px", fontSize: "13px" }}
                 >
                   <RefreshCw size={15} /> Sync with Host
                 </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "var(--text-muted)",
+                    fontSize: "13px",
+                  }}
+                >
                   <Lock size={15} /> Controlled by Host
                 </div>
               </div>
@@ -432,28 +531,36 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
           </div>
 
           {/* Latency & Time display */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '4px 9px',
-                borderRadius: '12px',
-                background: 'rgba(9, 14, 23, 0.6)',
-                border: '1px solid var(--glass-border)',
-                fontSize: '11px',
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "4px 9px",
+                borderRadius: "12px",
+                background: "rgba(9, 14, 23, 0.6)",
+                border: "1px solid var(--glass-border)",
+                fontSize: "11px",
                 fontWeight: 600,
-                color: latencyMs < 200 ? '#4ade80' : '#f87171',
+                color: latencyMs < 200 ? "#4ade80" : "#f87171",
               }}
               title="Live Network Latency & Frame Sync Accuracy"
             >
               <Zap size={12} />
               <span>{latencyMs}ms latency</span>
-              <span style={{ color: 'var(--text-muted)' }}>•</span>
-              <span style={{ color: 'var(--color-cyan)' }}>{syncDriftMs}ms drift</span>
+              <span style={{ color: "var(--text-muted)" }}>•</span>
+              <span style={{ color: "var(--color-cyan)" }}>
+                {syncDriftMs}ms drift
+              </span>
             </div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "var(--text-secondary)",
+              }}
+            >
               {formatTime(currentTime)} / {formatTime(duration)}
             </div>
           </div>
@@ -461,7 +568,7 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
 
         {/* Progress Seek Slider */}
         {canControl && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <input
               type="range"
               min={0}
@@ -470,9 +577,9 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
               value={currentTime}
               onChange={handleSeekSlider}
               style={{
-                width: '100%',
-                accentColor: 'var(--accent-red)',
-                cursor: 'pointer',
+                width: "100%",
+                accentColor: "var(--accent-red)",
+                cursor: "pointer",
               }}
             />
           </div>
@@ -480,22 +587,48 @@ export const YouTubePlayerComponent: React.FC<Props> = ({
 
         {/* Change Video Input (Host & Moderator) */}
         {canControl ? (
-          <form onSubmit={handleUrlSubmit} style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
+          <form
+            onSubmit={handleUrlSubmit}
+            style={{ display: "flex", gap: "10px", marginTop: "4px" }}
+          >
+            <div
+              style={{
+                position: "relative",
+                flex: 1,
+                border: "2px solid white",
+                borderRadius: "20px",
+              }}
+            >
               <Link2
                 size={16}
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--text-muted)",
+                }}
               />
               <input
                 type="text"
                 className="glass-input"
-                style={{ width: '100%', paddingLeft: '36px' }}
-                placeholder="Paste YouTube Video URL or Video ID (e.g. https://www.youtube.com/watch?v=...)"
+                style={{
+                  width: "100%",
+                  paddingLeft: "36px",
+                  border: "2px solid var(--accent-red)",
+                  backgroundColor: "var(--color-red)",
+                  color: "var(--color-white)",
+                }}
+                autoFocus
+                placeholder="Paste YouTube Video URL"
                 value={newVideoUrl}
                 onChange={(e) => setNewVideoUrl(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn-secondary">
+            <button
+              type="submit"
+              className="btn-secondary border-2 text-red-600"
+            >
               Load Video
             </button>
           </form>
