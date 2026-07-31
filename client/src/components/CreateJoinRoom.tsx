@@ -20,7 +20,8 @@ export interface AuthUser {
   name: string;
 }
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5001';
+const rawServerUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:5001';
+const SERVER_URL = rawServerUrl.replace(/\/+$/, '');
 
 export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = '' }) => {
   const [username, setUsername] = useState('');

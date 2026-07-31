@@ -11,7 +11,8 @@ interface AuthModalProps {
   ) => void;
 }
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5001";
+const rawServerUrl = import.meta.env.VITE_SERVER_URL || "http://localhost:5001";
+const SERVER_URL = rawServerUrl.replace(/\/+$/, "");
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
