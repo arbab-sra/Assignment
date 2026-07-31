@@ -10,12 +10,11 @@ export class Room {
   public isPlaying: boolean;
   public participants: Map<string, Participant> = new Map();
   public chatMessages: ChatMessageData[] = [];
-
   public lastUpdatedTimestamp: number = Date.now();
 
   constructor(
     code: string,
-    name: string = "Watch Party Room",
+    name: string = "Party Room",
     videoId: string = "dQw4w9WgXcQ",
     id?: string,
   ) {

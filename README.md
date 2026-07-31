@@ -10,10 +10,10 @@ Designed for seamless, sub-200ms multi-device synchronized video playback across
 
 All documentation has been organized into dedicated, deep-dive guides:
 
-- 🏗️ **[ARCHITECTURE.md](file:///Users/arbab/Desktop/Assignment/ARCHITECTURE.md)** — In-depth System Architecture, WebSocket event flow, sub-200ms latency compensation math, 3-tier adaptive playback engine, & PostgreSQL ERD model.
-- 📖 **[EXPLANATION.md](file:///Users/arbab/Desktop/Assignment/EXPLANATION.md)** — Technical Code Walkthrough, OOP domain models (`RoomManager`, `Room`, `Participant`), Bcryptjs + JWT optional authentication, dual room history merging, & mobile WebKit optimizations.
-- 🎨 **[client/README.md](file:///Users/arbab/Desktop/Assignment/client/README.md)** — Frontend React + Vite setup, component hierarchy, glassmorphism CSS design system, and Vercel deployment guide.
-- ⚙️ **[server/README.md](file:///Users/arbab/Desktop/Assignment/server/README.md)** — Backend Express + Socket.IO setup, REST API reference, WebSocket event table, Prisma ORM schema, and Railway deployment guide.
+- 🏗️ **[ARCHITECTURE.md](https://github.com/arbab-sra/Assignment/blob/main/ARCHITECTURE.md)** — In-depth System Architecture, WebSocket event flow, sub-200ms latency compensation math, 3-tier adaptive playback engine, & PostgreSQL ERD model.
+- 📖 **[EXPLANATION.md](https://github.com/arbab-sra/Assignment/blob/main/EXPLANATION.md)** — Technical Code Walkthrough, OOP domain models (`RoomManager`, `Room`, `Participant`), Bcryptjs + JWT optional authentication, dual room history merging, & mobile WebKit optimizations.
+- 🎨 **[client/README.md](https://github.com/arbab-sra/Assignment/blob/main/client/README.md)** — Frontend React + Vite setup, component hierarchy, glassmorphism CSS design system, and Vercel deployment guide.
+- ⚙️ **[server/README.md](https://github.com/arbab-sra/Assignment/blob/main/server/README.md)** — Backend Express + Socket.IO setup, REST API reference, WebSocket event table, Prisma ORM schema, and Railway deployment guide.
 
 ---
 
@@ -45,6 +45,7 @@ npm run dev
 ```
 
 ### Alternative Launchers
+
 - **Shell Script**: `./start.sh` (macOS / Linux)
 - **Containerized**: `docker compose up --build -d && cd client && npm run dev`
 

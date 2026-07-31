@@ -52,7 +52,7 @@ export class RoomManager {
     const uppercaseCode = code.toUpperCase();
     let room = this.getRoom(uppercaseCode);
     if (!room) {
-      room = await this.createRoom("Watch Party Room", uppercaseCode);
+      room = await this.createRoom("Party Room", uppercaseCode);
     }
     return room;
   }

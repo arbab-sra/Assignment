@@ -1,4 +1,4 @@
-# 🎨 syncbits Watch Party Frontend Client
+# 🎨 Syncbits Watch Party Frontend Client
 
 The frontend client for **syncbits Watch Party**, built with **React 18**, **Vite 5**, **TypeScript**, and **Vanilla CSS Glassmorphism Design**.
 
