@@ -52,6 +52,23 @@ export class RoomManager {
     const uppercaseCode = code.toUpperCase();
     let room = this.getRoom(uppercaseCode);
     if (!room) {
+      try {
+        const dbRoom = await prisma.room.findUnique({
+          where: { code: uppercaseCode },
+        });
+
+        if (dbRoom) {
+          room = new Room(dbRoom.code, dbRoom.name);
+          room.videoId = dbRoom.videoId;
+          room.currentTime = dbRoom.currentTime;
+          room.isPlaying = dbRoom.isPlaying;
+          this.rooms.set(dbRoom.code, room);
+          return room;
+        }
+      } catch (e) {
+        // Fallback to in-memory creation if DB is unavailable
+      }
+
       room = await this.createRoom("Party Room", uppercaseCode);
     }
     return room;
