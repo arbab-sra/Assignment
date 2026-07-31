@@ -187,17 +187,47 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
         }}
       >
         {/* Auth Bar Header */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: "16px",
+          }}
+        >
           {authUser ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(180, 225, 235, 0.12)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(180, 225, 235, 0.25)' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "rgba(180, 225, 235, 0.12)",
+                padding: "4px 10px",
+                borderRadius: "20px",
+                border: "1px solid rgba(180, 225, 235, 0.25)",
+              }}
+            >
               <UserCheck size={14} color="var(--color-cyan)" />
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-cyan)' }}>
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--color-cyan)",
+                }}
+              >
                 {authUser.name}
               </span>
               <button
                 type="button"
                 onClick={handleSignOut}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', marginLeft: '4px' }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  marginLeft: "4px",
+                }}
                 title="Sign Out"
               >
                 <LogOut size={13} />
@@ -208,18 +238,19 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
               type="button"
               onClick={() => setIsAuthModalOpen(true)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: 'rgba(249, 232, 162, 0.15)',
-                border: '1px solid rgba(249, 232, 162, 0.3)',
-                color: 'var(--color-yellow)',
-                padding: '6px 12px',
-                borderRadius: '20px',
-                fontSize: '12px',
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(249, 232, 162, 0.15)",
+                border: "1px solid rgba(249, 232, 162, 0.3)",
+                color: "var(--color-yellow)",
+                padding: "6px 12px",
+                borderRadius: "20px",
+                fontSize: "12px",
                 fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+
               }}
             >
               <LogIn size={14} /> Sign In / Register
@@ -428,7 +459,8 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
                   gap: "6px",
                 }}
               >
-                <Clock size={14} color="var(--color-cyan)" /> {authUser ? 'Your Cloud & Recent Rooms' : 'Recent Rooms'}
+                <Clock size={14} color="var(--color-cyan)" />{" "}
+                {authUser ? "Your Cloud & Recent Rooms" : "Recent Rooms"}
               </span>
               <button
                 type="button"
@@ -454,7 +486,9 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
               {recentRooms.map((item) => (
                 <div
                   key={item.code}
@@ -472,7 +506,13 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
                   }}
                   className="recent-room-item"
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
                     <span
                       style={{
                         fontFamily: "var(--font-heading)",
