@@ -16,7 +16,7 @@ const server = http.createServer(app);
 
 const rawClientUrl = process.env.CLIENT_URL || "*";
 const CORS_ORIGIN = rawClientUrl === "*" ? "*" : rawClientUrl.replace(/\/+$/, "");
-const JWT_SECRET = process.env.JWT_SECRET || "syncbits_super_secret_jwt_key_2026";
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());

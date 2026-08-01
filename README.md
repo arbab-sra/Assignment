@@ -6,6 +6,12 @@ Designed for seamless, sub-200ms multi-device synchronized video playback across
 
 ---
 
+## 🌐 Live Link
+
+**[https://liveproject.fun/](https://liveproject.fun/)**
+
+---
+
 ## 📚 Complete Project Documentation Index
 
 All documentation has been organized into dedicated, deep-dive guides:

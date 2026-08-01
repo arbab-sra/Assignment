@@ -3,8 +3,10 @@
 This document provides a detailed overview of the system architecture, real-time data flows, latency compensation algorithms, and database entity relationships powering **syncbits Watch Party**.
 
 ---
-
-## 📐 System Architecture Diagram
+## 📐 System Architecture Diagram   
+![alt text](image-1.png)
+--------------------------------------------------------------------
+![alt text](image.png)
 
 ```
  ┌───────────────────────────────────────────────────────────┐
