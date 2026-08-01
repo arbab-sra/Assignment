@@ -36,7 +36,7 @@ export class RoomManager {
         },
       });
     } catch (e) {
-      // Ignored if DB is offline
+      console.error("[RoomManager] Error persisting new room to DB:", e);
     }
 
     return room;
@@ -62,11 +62,32 @@ export class RoomManager {
           room.videoId = dbRoom.videoId;
           room.currentTime = dbRoom.currentTime;
           room.isPlaying = dbRoom.isPlaying;
+
+          // Re-hydrate chat history from PostgreSQL
+          try {
+            const dbMessages = await prisma.chatMessage.findMany({
+              where: { roomId: dbRoom.id },
+              orderBy: { timestamp: "asc" },
+              take: 100,
+            });
+            room.chatMessages = dbMessages.map((m) => ({
+              id: m.id,
+              username: m.username,
+              text: m.text,
+              timestamp: new Date(m.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            }));
+          } catch (chatErr) {
+            console.error("[RoomManager] Error restoring chat history:", chatErr);
+          }
+
           this.rooms.set(dbRoom.code, room);
           return room;
         }
       } catch (e) {
-        // Fallback to in-memory creation if DB is unavailable
+        console.error("[RoomManager] Error fetching room from DB:", e);
       }
 
       room = await this.createRoom("Party Room", uppercaseCode);

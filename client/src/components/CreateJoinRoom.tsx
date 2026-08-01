@@ -132,9 +132,11 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
     e.preventDefault();
     if (!username.trim() || isLoading) return;
 
-    let targetCode = roomCode.trim().toUpperCase();
-    if (mode === 'CREATE' && !targetCode) {
+    let targetCode = '';
+    if (mode === 'CREATE') {
       targetCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    } else {
+      targetCode = roomCode.trim().toUpperCase();
     }
 
     if (!targetCode) return;
@@ -331,7 +333,10 @@ export const CreateJoinRoom: React.FC<Props> = ({ onJoinRoom, defaultRoomCode = 
           </button>
           <button
             type="button"
-            onClick={() => setMode("CREATE")}
+            onClick={() => {
+              setMode("CREATE");
+              setRoomCode("");
+            }}
             style={{
               flex: 1,
               padding: "10px",

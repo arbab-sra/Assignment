@@ -32,6 +32,15 @@ The client will launch at `http://localhost:3000`.
 
 ---
 
+## 🌟 Key Frontend Features
+
+- **Bearer Token Authorization**: Automatically passes `Authorization: Bearer <token>` on REST requests to `/api/users/:userId/rooms` when signed in.
+- **Smart Query Parameter Navigation**: Preserves shareable room codes in URL parameters (`?room=XYZ`) for 1-click joining, while generating a fresh room code when switching to "Create Room" mode.
+- **High-Resolution YouTube Video Poster**: Displays initial YouTube video poster thumbnail (`https://img.youtube.com/vi/${activeVideoId}/hqdefault.jpg`) during player loading, and exact live video frame at the current timeline position when paused.
+- **Glassmorphism Design Tokens**: Custom CSS variables, backdrop filters, responsive two-column grid layout, and zero-scroll-shift chat containers.
+
+---
+
 ## 📁 Directory Structure & Components
 
 ```

@@ -20,6 +20,13 @@ export function setupSocketHandlers(io: Server) {
       "join_room",
       async ({ roomId, username, userId }: { roomId: string; username: string; userId?: string }) => {
         const code = (roomId || "default").toUpperCase();
+
+        // If socket is already in a different room, cleanly disconnect it first
+        const existingRoom = roomManager.findRoomBySocketId(socket.id);
+        if (existingRoom && existingRoom.code !== code) {
+          await handleUserDisconnect(socket);
+        }
+
         const room = await roomManager.getOrCreateRoom(code);
 
         // Create new participant instance
@@ -50,7 +57,7 @@ export function setupSocketHandlers(io: Server) {
             }
           }
         } catch (e) {
-          // Fallback if DB is unavailable
+          console.error("[Join Room DB Error]", e);
         }
 
         // Join socket.io channel
@@ -260,7 +267,7 @@ export function setupSocketHandlers(io: Server) {
     // 8. Remove Participant (Host only)
     socket.on(
       "remove_participant",
-      ({ targetSocketId }: { targetSocketId: string }) => {
+      async ({ targetSocketId }: { targetSocketId: string }) => {
         const room = roomManager.findRoomBySocketId(socket.id);
         if (!room) return;
 
@@ -272,6 +279,15 @@ export function setupSocketHandlers(io: Server) {
             "error_message",
             "Permission denied: Only Host can remove participants.",
           );
+        }
+
+        // Clean up target participant from DB immediately
+        try {
+          await prisma.participant.deleteMany({
+            where: { socketId: targetSocketId },
+          });
+        } catch (e) {
+          console.error("[Kick DB Error]", e);
         }
 
         // Notify target socket & force disconnect
@@ -318,7 +334,7 @@ export function setupSocketHandlers(io: Server) {
           });
         }
       } catch (e) {
-        // Fallback if DB unavailable
+        console.error("[Chat Message DB Error]", e);
       }
     });
 

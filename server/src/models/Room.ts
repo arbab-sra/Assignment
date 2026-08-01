@@ -1,5 +1,6 @@
 import { Participant } from "./Participant";
 import { Role, VideoState, ChatMessageData, RoomData } from "../utility/types";
+import { prisma } from "../utility/db";
 
 export class Room {
   public readonly id: string;
@@ -83,6 +84,17 @@ export class Room {
     }
 
     target.setRole(newRole);
+
+    // Persist role change back to DB asynchronously
+    prisma.participant
+      .updateMany({
+        where: { socketId: targetSocketId },
+        data: { role: newRole },
+      })
+      .catch((e) => {
+        console.error("[Room] Error persisting role change to DB:", e);
+      });
+
     return true;
   }
 
@@ -119,6 +131,20 @@ export class Room {
     if (currentTime !== undefined) this.currentTime = currentTime;
     if (isPlaying !== undefined) this.isPlaying = isPlaying;
     this.lastUpdatedTimestamp = Date.now();
+
+    // Persist live video state changes back to PostgreSQL asynchronously
+    prisma.room
+      .update({
+        where: { code: this.code },
+        data: {
+          videoId: this.videoId,
+          currentTime: this.currentTime,
+          isPlaying: this.isPlaying,
+        },
+      })
+      .catch((e) => {
+        console.error("[Room] Error persisting video state to DB:", e);
+      });
   }
 
   // Add chat message

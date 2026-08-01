@@ -48,14 +48,23 @@ JWT_SECRET=your_jwt_secret_key_here
 
 ## 🌐 REST API Reference
 
-| Endpoint | Method | Body / Params | Description |
+| Endpoint | Method | Security / Headers | Description |
 | :--- | :--- | :--- | :--- |
-| `/` | `GET` | None | Root health check for deployment platforms |
-| `/api/health` | `GET` | None | Service health status |
-| `/api/auth/register` | `POST` | `{ email, password, name }` | Registers a user and returns JWT token |
-| `/api/auth/login` | `POST` | `{ email, password }` | Authenticates user and returns JWT token |
-| `/api/users/:userId/rooms` | `GET` | Header: `Authorization: Bearer <token>` | Fetches cross-device room history for user |
-| `/api/rooms/:code` | `GET` | Code param | Fetches room details & state snapshot |
+| `/` | `GET` | Open | Root deployment health check |
+| `/api/health` | `GET` | Open | Service status check |
+| `/api/auth/register` | `POST` | Open | Registers user (bcrypt hash) & returns 30-day JWT token |
+| `/api/auth/login` | `POST` | Open | Authenticates user & returns 30-day JWT token |
+| `/api/users/:userId/rooms` | `GET` | `Authorization: Bearer <token>` | Fetches cross-device room history (enforces `req.user.userId === userId`) |
+| `/api/rooms/:code` | `GET` | Open | Fetches room state snapshot (with PostgreSQL auto-re-hydration) |
+
+---
+
+## 🔒 Security & Persistence Features
+
+- **JWT Authorization Middleware**: `authenticateJWT` middleware validates Bearer tokens on protected REST routes and verifies caller user ownership.
+- **Dynamic CORS Security**: Replaced wildcard CORS with dynamic origin validator supporting `https://liveproject.fun`, `https://assignment.arbab.fun`, `http://localhost:3000`, and `http://localhost:5173` with `credentials: true`.
+- **Database Persistence**: Live playback state changes (`videoId`, `currentTime`, `isPlaying`), role updates, and chat messages are written back to PostgreSQL via Prisma.
+- **PostgreSQL Re-hydration**: On server restarts, rooms and historical chat messages are restored from PostgreSQL into memory when accessed.
 
 ---
 
@@ -63,15 +72,15 @@ JWT_SECRET=your_jwt_secret_key_here
 
 | Event | Payload | Description |
 | :--- | :--- | :--- |
-| `join_room` | `{ roomId, username, userId? }` | Enters socket into room channel |
+| `join_room` | `{ roomId, username, userId? }` | Enters socket into room channel (cleans up previous room) |
 | `play` | `{ currentTime }` | Broadcasts video play with server timestamp |
 | `pause` | `{ currentTime }` | Broadcasts video pause with server timestamp |
 | `seek` | `{ time }` | Broadcasts video position seek |
 | `change_video` | `{ videoId }` | Swaps YouTube video URL room-wide |
-| `send_message` | `{ text }` | Broadcasts chat message |
+| `send_message` | `{ text }` | Broadcasts and persists chat message |
 | `send_reaction` | `{ emoji }` | Broadcasts floating reaction emoji |
-| `assign_role` | `{ targetSocketId, role }` | Promotes/demotes participant |
-| `remove_participant` | `{ targetSocketId }` | Kicks user from room |
+| `assign_role` | `{ targetSocketId, role }` | Promotes/demotes participant & updates DB |
+| `remove_participant` | `{ targetSocketId }` | Kicks user & deletes DB record immediately |
 
 ---
 
